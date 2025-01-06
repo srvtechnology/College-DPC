@@ -1,0 +1,292 @@
+<?php
+
+namespace App\Http\Controllers\API\Teacher;
+
+use App\Models\User;
+use App\Models\Staff;
+use App\Models\Classes;
+use App\Models\Section;
+use App\Models\Student;
+use Illuminate\Http\Request;
+use App\Models\LeaveApplication;
+use App\Models\StudentAttendance;
+use App\Models\StudentClassAssign;
+use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
+use App\Models\Session;
+
+class AttendanceController extends Controller
+{
+    public function studentList(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'class_id' => 'required',
+            'section_id' => 'required',
+            'date' => 'required',
+        ]);
+
+        if($validator->fails()){
+            return response()->json([
+                'status' => 'error',
+                'message' => $validator->errors()
+            ],422);
+        }
+
+        $classCount = Classes::find($request->class_id);
+        if(!$classCount)
+        {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No Class Found.'
+            ],404);
+        }
+
+        $sectionCount = Section::find($request->class_id);
+        if(!$sectionCount)
+        {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No Section Found.'
+            ],404);
+        }
+
+        $user = User::where('id',Auth::user()->id)->first();
+        $school = $user->school;
+        $staff = Staff::where('username',Auth::user()->username)->first();
+        if(empty($staff->assign_class_to_class_teacher) AND empty($staff->assign_section_to_class_teacher))
+        {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'This Teacher is not a Class Teacher of any class yet.'
+            ],200);
+        }
+
+        $response = null;
+        $student_assign_classes = StudentClassAssign::where('school_id', $school->id)
+        ->where('class_id', $request->class_id)
+        ->where('section_id', $request->section_id)
+        ->get();
+        $date = date("Y-m-d",strtotime($request->date));
+        if(count($student_assign_classes))
+        {
+            foreach($student_assign_classes as $class)
+            {
+                $student = Student::find($class->student_id);
+                $attendance_bit = getStudentAttendance($request->class_id,$request->section_id,$student->id,$date);
+                if($attendance_bit == "-")
+                {
+                    $attendance_bit = null;
+                }
+                if(!empty($student->image) AND file_exists(public_path('uploads/schools/student').'/'.$student->image))
+                {
+                    $student['image'] = asset('uploads/schools/student/'.$student->image);
+                }
+                $response[] = [
+                    'id' => $student->id,
+                    'name' => $student->first_name.' '.$student->last_name,
+                    'gender' => $student->gender,
+                    'attendance' => $attendance_bit,
+                    'image' => $student->image,
+                    'date' =>$date
+                ];
+            }
+
+            $session = Session::select('id','start_date','end_date')->where(['school_id' => $school->id, 'is_deleted'=>'0', 'is_active'=>'1'])->OrderBy("id","desc")->first();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Students Attendance',
+                'data' => $response,
+                'sessionData' => $session
+            ],200);
+        }
+        else
+        {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No Data Found'
+            ],404);
+        }
+    }
+
+    public function addStudentAttendance(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'class_id' => 'required',
+            'section_id' => 'required',
+            'date' => 'required',
+            'student_id' => 'required',
+            'attendance' => 'required',
+        ]);
+
+        if($validator->fails()){
+            return response()->json([
+                'status' => 'error',
+                'message' => $validator->errors()
+            ],422);
+        }
+
+        $classCount = Classes::find($request->class_id);
+        if(!$classCount)
+        {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No Class Found.'
+            ],404);
+        }
+
+        $sectionCount = Section::find($request->class_id);
+        if(!$sectionCount)
+        {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No Section Found.'
+            ],404);
+        }
+
+        $student = Student::find($request->student_id);
+        if(!$student)
+        {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No Student Found.'
+            ],404);
+        }
+
+        $user = User::where('id',Auth::user()->id)->first();
+        $school = $user->school;
+        $staff = Staff::where('username',Auth::user()->username)->first();
+        if(!empty($staff->assign_class_to_class_teacher) AND !empty($staff->assign_section_to_class_teacher))
+        {
+            if($staff->assign_class_to_class_teacher == $request->class_id AND $staff->assign_section_to_class_teacher == $request->section_id)
+            {
+                if($request->attendance == 0)
+                {
+                    $attendance_bit = 0;
+                }
+                else if($request->attendance == 1)
+                {
+                    $attendance_bit = 1;
+                }
+                else
+                {
+                    $attendance_bit = 2;
+                }
+                $student_attendance = StudentAttendance::where('school_id',$school->id)
+                ->where('class_id',$request->class_id)
+                ->where('section_id',$request->section_id)
+                ->where('staff_id',$staff->id)
+                ->where('student_id',$student->id)
+                ->whereDate('date',date("Y-m-d",strtotime($request->date)))
+                ->first();
+                if(!$student_attendance)
+                {
+                    $student_attendance = new StudentAttendance;
+                }
+
+                $student_attendance->school_id = $school->id;
+                $student_attendance->class_id = $request->class_id;
+                $student_attendance->section_id = $request->section_id;
+                $student_attendance->staff_id = $staff->id;
+                $student_attendance->student_id = $student->id;
+                $student_attendance->date = date("Y-m-d H:i:s",strtotime($request->date));
+                $student_attendance->attendance = $attendance_bit;
+                $student_attendance->save();
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Attendance added Successfully'
+                ],200);
+            }
+            else
+            {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'You have no right to take attendance of this class'
+                ],400);
+            }
+        }
+        else
+        {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'This Teacher is not a Class Teacher of any class yet.'
+            ],400);
+        }
+    }
+
+    public function viewStudents(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'class_id' => 'required',
+            'section_id' => 'required',
+        ]);
+
+        if($validator->fails()){
+            return response()->json([
+                'status' => 'error',
+                'message' => $validator->errors()
+            ],422);
+        }
+
+        $classCount = Classes::find($request->class_id);
+        if(!$classCount)
+        {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No Class Found.'
+            ],404);
+        }
+
+        $sectionCount = Section::find($request->class_id);
+        if(!$sectionCount)
+        {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No Section Found.'
+            ],404);
+        }
+
+        $user = User::where('id',Auth::user()->id)->first();
+        $school = $user->school;
+        $staff = Staff::where('username',Auth::user()->username)->first();
+        $response = null;
+        $student_assign_classes = StudentClassAssign::where('school_id', $school->id)
+        ->where('class_id', $request->class_id)
+        ->where('section_id', $request->section_id)
+        ->get();
+        if(count($student_assign_classes))
+        {
+            foreach($student_assign_classes as $class)
+            {
+                $student = Student::find($class->student_id);
+                if(!empty($student->image) AND file_exists(public_path('uploads/schools/student').'/'.$student->image))
+                {
+                    $student['image'] = asset('uploads/schools/student/'.$student->image);
+                }
+                $response[] = [
+                    'id' => $student->id,
+                    'name' => $student->first_name.' '.$student->last_name,
+                    'gender' => $student->gender,
+                    'image' => $student->image,
+                ];
+            }
+
+            $session = Session::select('id','start_date','end_date')->where(['school_id' => $school->id, 'is_deleted'=>'0', 'is_active'=>'1'])->OrderBy("id","desc")->first();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'View All Students',
+                'data' => $response,
+                'sessionData' => $session
+            ],200);
+        }
+        else
+        {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No Data Found'
+            ],404);
+        }
+    }
+}

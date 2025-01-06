@@ -1,0 +1,256 @@
+@extends('school.layouts.main')
+@section('page_title', 'Schools')
+@section('content')
+<style>
+    .custom-section{
+        height: 150px;
+        overflow: scroll;
+        width: 20%;
+        overflow-x: hidden;
+    }
+</style>
+    <div class="content-wrapper">
+        <!-- Content -->
+        <div class="container-xxl flex-grow-1 container-p-y">
+            <div class="d-flex justify-content-between">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb breadcrumb-style2 mb-0">
+                        <li class="breadcrumb-item">
+                            <a href="{{ route('school.dashboard') }}">Home</a>
+                        </li>
+                        <li class="breadcrumb-item">
+                            <a href="{{ route('school.class') }}">Department</a>
+                        </li>
+                        <li class="breadcrumb-item active">Create Department</li>
+                    </ol>
+                </nav>
+                <a href="{{ route('school.class') }}" class="btn rounded-pill btn-primary text-white">Back</a>
+            </div>
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="my-3">
+                        <div class="card mb-4">
+                            <div class="card-body">
+                                <form id="myForm" action="{{ route('school.class.store') }}" method="POST">
+                                    @csrf
+                                    <div id="fieldContainer">
+                                        <div class="row">
+                                            <div class="col-md-4 mb-3">
+                                                <div class="form-group">
+                                                    <label for="field1">Name:</label>
+                                                    <input type="text" class="form-control" id="name" name="name1[]">
+                                                    <div class="nameError text-danger error-message"></div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3 mb-3">
+
+                                                <div class="form-group">
+                                                    <label for="field1">Year:</label>
+                                                    <div class="sectionError text-danger error-message"></div>
+                                                </div>
+                                                <div class="form-group">
+                                                    <select class="select2_custom form-control section_id1" id="section_id1" select_id="1" selected_class_name="section_id1" name="section_id1[]" multiple="multiple" onfocus="getSelectAllOption(event)">
+                                                        <option value="all">Select All</option>
+                                                        @if(count($sections) > 0)
+                                                        @foreach($sections as $section)
+                                                            <option value="{{ $section->id }}">{{ $section->name }}</option>
+                                                            @endforeach
+                                                        @endif
+                                                      </select>
+                                                </div>
+                                            </div>
+                                            {{--  <div class="col-md-3 mb-3">
+
+                                                <div class="form-group">
+                                                    <label for="field1">Subjects:</label>
+                                                    <div class="subjectError text-danger error-message"></div>
+                                                </div>
+                                                <div class="form-group">
+                                                    <select class="select2_custom form-control subject_id1" id="subject_id1" select_id="1" selected_class_name="subject_id1" name="subject_id1[]" multiple="multiple">
+                                                        <option value="all">Select All</option>
+                                                        @if(count($subjects) > 0)
+                                                        @foreach($subjects as $subject)
+                                                            <option value="{{ $subject->id }}">{{ $subject->name }}</option>
+                                                            @endforeach
+                                                        @endif
+                                                      </select>
+                                                </div>
+                                            </div>  --}}
+                                            <div class="col-md-2 text-end">
+                                                <button type="button" class="btn btn-primary mt-2 addField" id="addField"><i class='bx bx-plus-medical'></i></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary mt-2" id="submitBtn">Submit</button>
+                                  </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- / Content -->
+        <div class="content-backdrop fade"></div>
+    </div>
+
+    @push('footer-script')
+    <script>
+        function selectElementsFocus(selectElement) {
+            $(selectElement).select2();
+            $(selectElement).on('select2:open', function (e) {
+                var focusedSelect2 = this;
+                var selected_class_name = $(focusedSelect2).attr('selected_class_name');
+
+                $(focusedSelect2).on('change', function (e) {
+                    var selectedValues = $(this).val();
+
+                    if (selectedValues && selectedValues.includes("all")) {
+                        $(this).find('option:not([value="all"])').prop('selected', true);
+                        $(this).find('option[value="all"]').prop('selected', false);
+                    } else {
+                        $(this).find('option[value="all"]').prop('selected', false);
+                    }
+                    $(this).trigger('change.select2');
+                });
+            });
+        }
+
+    </script>
+    <script>
+        function handleSelectAllOption(selectClass, allValue) {
+            $(selectClass).change(function() {
+                if ($(this).val() != null && $(this).val().includes(allValue)) {
+                    $(this).find('option:not([value="' + allValue + '"])').prop('selected', true);
+                    $(this).find('option[value="' + allValue + '"]').prop('selected', false);
+                } else {
+                    $(this).find('option[value="' + allValue + '"]').prop('selected', false);
+                }
+            });
+        }
+
+        handleSelectAllOption('.section_id1', 'all');
+        handleSelectAllOption('.subject_id1', 'all');
+    </script>
+    <script>
+
+        $('.select2_custom').each(function () {
+            selectElementsFocus(this);
+        });
+
+        var fieldIndex = 2; // Initial field index
+
+    // Add new field
+    $('.addField').on('click', function() {
+      var newField =
+        `<div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="form-group">
+                    <label for="field1">Name:</label>
+                    <input type="text" class="form-control" id="name" name="name${fieldIndex}[]">
+                    <div class="nameError text-danger error-message"></div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+
+                <div class="form-group">
+                    <label for="field1">Year:</label>
+                    <div class="sectionError text-danger error-message"></div>
+                </div>
+                <div class="form-group">
+                    <select class="select2_custom form-control section_id${fieldIndex}" select_id="${fieldIndex}" selected_class_name="section_id${fieldIndex}" name="section_id${fieldIndex}[]" multiple="multiple">
+                        <option value="all">Select All</option>
+                        @if(count($sections) > 0)
+                        @foreach($sections as $section)
+                            <option value="{{ $section->id }}">{{ $section->name }}</option>
+                            @endforeach
+                        @endif
+                      </select>
+                </div>
+            </div>
+            {{--  <div class="col-md-3 mb-3">
+
+                <div class="form-group">
+                    <label for="field1">Subjects:</label>
+                    <div class="subjectError text-danger error-message"></div>
+                </div>
+                <div class="form-group">
+                    <select class="select2_custom form-control subject_id${fieldIndex}" name="subject_id${fieldIndex}[]" select_id="${fieldIndex}" selected_class_name="subject_id${fieldIndex}" multiple="multiple">
+                        <option value="all">Select All</option>
+                        @if(count($subjects) > 0)
+                        @foreach($subjects as $subject)
+                            <option value="{{ $subject->id }}">{{ $subject->name }}</option>
+                            @endforeach
+                        @endif
+                      </select>
+                </div>
+            </div>  --}}
+          <div class="col-md-2 text-end">
+            <button type="button" class="btn btn-danger mt-2 removeFieldBtn"><i class="bx bx-trash"></i></button>
+          </div>
+        </div>`;
+
+      $('#fieldContainer').append(newField);
+      // Initialize Select2 only for last and second-to-last fields
+        var selectFields = $('#fieldContainer').find('.select2_custom');
+        selectFields.eq(selectFields.length - 1).select2();
+        if (selectFields.length > 1) {
+        selectFields.eq(selectFields.length - 2).select2();
+        }
+
+        $('.select2_custom').each(function () {
+            selectElementsFocus(this);
+        });
+
+      fieldIndex++; // Increment field index
+    });
+
+    // Remove field
+    $(document).on('click', '.removeFieldBtn', function() {
+      $(this).closest('.row').remove();
+    });
+
+
+
+    $('#myForm').submit(function(event) {
+        event.preventDefault(); // Prevent form submission
+        $(this).off('submit').submit();
+
+        // Clear previous error messages
+        $('.nameError').empty();
+        $('.sectionError').empty();
+         $('.subjectError').empty();
+
+        var errorCount = 0;
+
+        $('#fieldContainer .row').each(function() {
+            var nameField = $(this).find('input[type="text"]');
+      var fieldIndex = nameField.attr('name').match(/\d+/)[0];
+      var sectionSelect = $(this).find('select[name="section_id' + fieldIndex + '[]"]');
+      var subjectSelect = $(this).find('select[name="subject_id' + fieldIndex + '[]"]');
+
+
+      if (nameField.val().trim() === '') {
+        nameField.siblings('.nameError').text('Name is required.');
+        errorCount++;
+      }
+
+      if (sectionSelect.val() === null || sectionSelect.val().length === 0) {
+        $(this).find('.sectionError').text('Select at least one section.');
+        errorCount++;
+      }
+
+      if (subjectSelect.val() === null || subjectSelect.val().length === 0) {
+        $(this).find('.subjectError').text('Select at least one subject.');
+        errorCount++;
+      }
+        });
+
+        if (errorCount === 0) {
+          // No errors, perform form submission
+          $(this).off('submit').submit();
+        }
+    });
+    </script>
+    @endpush
+@endsection
+
